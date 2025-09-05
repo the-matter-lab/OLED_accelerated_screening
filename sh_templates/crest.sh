@@ -1,9 +1,10 @@
-BATCH --account=rrg-aspuru
+#!/bin/bash
+#SBATCH --account=rrg-aspuru
 #SBATCH --nodes=1
-#SBATCH --ntasks={NTASKS}
-#SBATCH --time=12:00:00
-{WALLTIME_OVERRIDE:+#SBATCH --time={WALLTIME_OVERRIDE}}
-#SBATCH --job-name={JOB_NAME}
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=[[CPUS_PER_TASK]]
+[[WALLTIME_LINE]]
+#SBATCH --job-name=[[JOB_NAME]]
 
 set -euo pipefail
 
@@ -12,18 +13,19 @@ cat "$SLURM_JOB_NODELIST" || true
 cd "$SLURM_SUBMIT_DIR"
 
 # Threads
-export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-{NTASKS}}
-export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK:-{NTASKS}}
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-[[CPUS_PER_TASK]]}
+export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK:-[[CPUS_PER_TASK]]}
 ulimit -s unlimited
 
-# Modules (adapt to your cluster)
+# Modules (adapt if needed)
 module --force purge
 module load CCEnv
 module load StdEnv/2020
 module load crest/2.12
+source $HOME/jupyter_oled/bin/activate
 
 # Inputs
-cp "{XYZ_SRC_REL}" "{XYZ_BASENAME}"
+cp "[[XYZ_SRC_REL]]" "[[XYZ_BASENAME]]"
 
 # Optional constraints
 CINP=""
@@ -35,22 +37,19 @@ fi
 START_ISO=$(date -Iseconds)
 START_EPOCH=$(date +%s)
 
-# Run CREST (do not hard-fail if crest nonzero; we want to write metadata)
+# Run CREST (don't hard-exit on nonzero so we can write metadata)
 set +e
-echo "Starting CREST on {XYZ_BASENAME} with OMP_NUM_THREADS=$OMP_NUM_THREADS, GBSA={GBSA_SOLVENT}"
-crest "{XYZ_BASENAME}" --gfn2 $CINP --gbsa "{GBSA_SOLVENT}" --mquick --noreftopo -T "$OMP_NUM_THREADS" > crest.log 2>&1
+echo "Starting CREST on [[XYZ_BASENAME]] with OMP_NUM_THREADS=${OMP_NUM_THREADS}, GBSA=[[GBSA_SOLVENT]]"
+crest "[[XYZ_BASENAME]]" --gfn2 $CINP --gbsa "[[GBSA_SOLVENT]]" --mquick --noreftopo -T "${OMP_NUM_THREADS}" > crest.log 2>&1
 RC=$?
 set -e
-
 mv -f crest.log crest.out
 
-# Collect best structure(s)
+# Best structure (kept locally as best.xyz)
 BEST_LOCAL=""
 if [ -f crest_best.xyz ]; then
   cp -f crest_best.xyz best.xyz
   BEST_LOCAL="best.xyz"
-  # also store canonical best geom one level up
-  cp -f crest_best.xyz "{BEST_GEOM_DST}" || true
 fi
 
 # Success detection
@@ -72,23 +71,12 @@ meta = {
   "runtime_seconds": int(os.environ.get("RUNTIME","0")),
   "returncode": int(os.environ.get("RC","0")),
   "success": os.environ.get("SUCCESS","false") == "true",
-  "gbsa": "{GBSA_SOLVENT}",
+  "gbsa": "[[GBSA_SOLVENT]]",
   "threads": int(os.environ.get("OMP_NUM_THREADS","0")),
-  "xyz_input": "{XYZ_BASENAME}",
-  "best_local": "{BL}",
-  "best_geom_dst": "{BEST_DST}",
+  "xyz_input": "[[XYZ_BASENAME]]",
+  "best_local": os.environ.get("BEST_LOCAL","")
 }
 pathlib.Path("metadata.json").write_text(json.dumps(meta, indent=2))
-PY
-# substitute placeholders for best paths (bash can't expand inside the heredoc easily)
-python3 - <<'PY'
-import json
-from pathlib import Path
-p = Path("metadata.json")
-d = json.loads(p.read_text())
-d["best_local"] = "{BL}".format(BL=os.environ.get("BEST_LOCAL",""))
-d["best_geom_dst"] = "{BEST_DST}"
-p.write_text(json.dumps(d, indent=2))
 PY
 
 echo "CREST done. success=$SUCCESS runtime=${RUNTIME}s rc=$RC"
