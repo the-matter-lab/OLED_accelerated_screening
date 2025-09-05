@@ -19,7 +19,7 @@ It’s also <strong>El Agente–friendly</strong>.
 python obabel.py
 python filter_obabel.py
 ```
-
+## Notes
 
 > **ORCA Dependency**  
 > This project uses the [ORCA quantum chemistry software](https://orcaforum.kofo.mpg.de), which is **not included** in this repository.  
