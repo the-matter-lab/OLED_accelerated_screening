@@ -3,17 +3,17 @@ import os
 import json
 import time
 import shutil
+import signal
 import subprocess
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 BASE_DIR = Path("compounds")
-LOGS_DIR = Path("logs")
 
-def run_obabel(task):
+def run_obabel(task, timeout_s: int = 600):
     mol_name, smiles = task
     start_dt = datetime.now().isoformat(timespec="seconds")
     t0 = time.monotonic()
@@ -24,16 +24,41 @@ def run_obabel(task):
     xyz_path = mol_dir / f"{mol_name}.xyz"
     cmd = ["obabel", f"-:{smiles}", "-O", str(xyz_path), "--gen3d", "best"]
 
-    rc, error, stderr_tail = None, False, ""
+    rc, stdout, stderr, error = None, "", "", False
     try:
-        # simple call → fewer teardown issues; no shell, no pipe capture
-        rc = subprocess.call(cmd)
-        success = (rc == 0) and xyz_path.exists() and xyz_path.stat().st_size > 0
-        error = not success
+        # new process group → we can kill all children on timeout
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout_s)
+            rc = proc.returncode
+        except subprocess.TimeoutExpired:
+            # graceful then hard kill of the whole group
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+                try:
+                    stdout, stderr = proc.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                    stdout, stderr = proc.communicate()
+            except ProcessLookupError:
+                pass
+            rc = None
+            error = True
+            stderr = (stderr or "") + f"\n[TIMEOUT after {timeout_s}s]"
     except Exception as e:
         error = True
         rc = None
-        stderr_tail = str(e)
+        stderr = str(e)
+
+    success = (rc == 0) and xyz_path.exists() and xyz_path.stat().st_size > 0
+    if not success:
+        error = True
 
     end_dt = datetime.now().isoformat(timespec="seconds")
     runtime_s = round(time.monotonic() - t0, 3)
@@ -46,15 +71,14 @@ def run_obabel(task):
         "command": " ".join(cmd),
         "returncode": rc if rc is not None else -999,
         "error": bool(error),
-        "stderr_tail": stderr_tail,
+        "stdout_tail": (stdout or "")[-2000:],
+        "stderr_tail": (stderr or "")[-2000:],
         "xyz_path": str(xyz_path),
     }
     (mol_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
+
     return mol_name if error else None
 
-def chunks(seq, size):
-    for i in range(0, len(seq), size):
-        yield seq[i:i+size]
 
 if __name__ == "__main__":
     if shutil.which("obabel") is None:
@@ -70,30 +94,25 @@ if __name__ == "__main__":
     tasks = list(zip(names, df["smiles"].astype(str).tolist()))
 
     BASE_DIR.mkdir(exist_ok=True)
-    LOGS_DIR.mkdir(exist_ok=True)
 
-    # conservative worker count to avoid FS contention
-    env_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", os.cpu_count() or 4))
-    n_workers = min(env_workers, 32)
-    batch_size = 100
-
-    print(f"Using {n_workers} workers (thread pool). Processing in batches of {batch_size}.")
+    # keep parallelism modest to avoid overloading filesystem/obabel
+    default_workers = min(16, os.cpu_count() or 4)
+    n_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", default_workers))
+    print(f"Using {n_workers} workers.")
 
     errors = []
-    for i, batch in enumerate(chunks(tasks, batch_size), 1):
-        print(f"Batch {i}: processing {len(batch)} molecules")
-        with ThreadPoolExecutor(max_workers=n_workers) as ex:
-            for mol_error in tqdm(ex.map(run_obabel, batch),
-                                  total=len(batch),
-                                  desc=f"batch {i}",
-                                  smoothing=0):
-                if mol_error:
-                    errors.append(mol_error)
+    with ThreadPoolExecutor(max_workers=n_workers) as ex:
+        futures = [ex.submit(run_obabel, t, 600) for t in tasks]  # 600s timeout per molecule
+        for fut in tqdm(as_completed(futures), total=len(futures), desc="Generating XYZ files"):
+            mol_error = fut.result()
+            if mol_error:
+                errors.append(mol_error)
 
-    # Global log file
-    log_path = LOGS_DIR / "obabel_data.log"
+    # Global obabel.log
+    os
+    log_path = Path("logs/obabel.log")
     with log_path.open("w") as logf:
-        for mol_name, _ in tasks:
+        for mol_name, smiles in tasks:
             meta_path = BASE_DIR / mol_name / "obabel" / "metadata.json"
             if meta_path.is_file():
                 try:
@@ -109,7 +128,7 @@ if __name__ == "__main__":
             logf.write(line)
 
     if errors:
-        print(f"completed with errors in {len(errors)} molecules. see {log_path}")
+        print(f"completed with errors in {len(errors)} molecules. see obabel.log")
     else:
-        print(f"all {len(tasks)} molecules processed successfully. see {log_path}")
+        print(f"all {len(tasks)} selected molecules processed successfully. see obabel.log")
 
