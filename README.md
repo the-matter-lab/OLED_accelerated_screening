@@ -19,6 +19,17 @@ It’s also <strong>El Agente–friendly</strong>.
 python obabel.py
 python filter_obabel.py
 ```
+
+### 2. Obtain the best conformer using CREST 
+```bash
+python submit_crest_partition.py \
+    --partition_dir compounds/partition_0 \
+    --templates sh_templates \
+    --cpus-per-task 40 \
+    --time 12:00:00 \
+    --gbsa dichlormethane
+```
+
 ## Notes
 
 > **ORCA Dependency**  
