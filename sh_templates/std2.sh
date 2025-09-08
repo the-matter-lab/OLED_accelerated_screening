@@ -10,6 +10,8 @@ echo "Nodes:"
 cat "$SLURM_JOB_NODELIST" || true
 cd "$SLURM_SUBMIT_DIR"
 
+set -euo pipefail
+
 # Threads
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK:-[[CPUS_PER_TASK]]}
 export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK:-[[CPUS_PER_TASK]]}
@@ -21,10 +23,10 @@ module --force purge
 module load NiaEnv/2019b
 module load intel/2019u4
 
-# Activate your Python env for the inline parsing step
+# Activate Python for inline parsing
 source "$HOME/jupyter_oled/bin/activate"
 
-# --- std2/xTB4sTDA paths (you can override via env) ---
+# --- std2/xTB4sTDA paths ---
 export STD2HOME=${STD2HOME:-$HOME/apps/std2/1.6.1}
 export PATH="$STD2HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$STD2HOME/lib:$STD2HOME/lib64:${LD_LIBRARY_PATH:-}"
@@ -33,23 +35,21 @@ export LD_LIBRARY_PATH="/scinet/intel/2019u4/compilers_and_libraries_2019.4.243/
 export XTB4STDAHOME=${XTB4STDAHOME:-$HOME/apps/xtb4stda/1.0}
 export PATH="$XTB4STDAHOME/bin:$PATH"
 
-
-# Clean stale wavefunction/logs (prevents confusion on resubmits)
-rm -f wfn.xtb xtbtopo.mol tda.dat wbo xtbrestart xtb4stda.out std2.out
+# Clean stale files
+rm -f wfn.xtb xtbtopo.mol tda.dat wbo xtbrestart xtb4stda.out std2.out std2_singlets.out std2_triplets.out tda_singlets.dat tda_triplets.dat
 
 echo "GBSA=[[GBSA_SOLVENT]]  EMAX=[[EMAX_EV]] eV  OMP=$OMP_NUM_THREADS"
 echo "Input XYZ: [[XYZ_BASENAME]]"
-
 if [ ! -s "[[XYZ_BASENAME]]" ]; then
   echo "ERROR: Missing input [[XYZ_BASENAME]]" >&2
-  # still write metadata with errors
   python3 - <<'PY'
 import json
 from pathlib import Path
 Path("metadata.json").write_text(json.dumps({
   "xtb4stda_error": True,
-  "std2_error": True,
-  "runtime_seconds": 0,
+  "std2_singlets_error": True,
+  "std2_triplets_error": True,
+  "runtime_seconds_total": 0,
   "gbsa": "[[GBSA_SOLVENT]]",
   "emax_ev": float("[[EMAX_EV]]"),
   "threads": int("[[CPUS_PER_TASK]]"),
@@ -59,58 +59,79 @@ PY
   exit 2
 fi
 
-START_EPOCH=$(date +%s)
+T0=$(date +%s)
 
-# Run xTB pre-step (line-buffer so logs update live)
+# 1) xtb4stda (pre-step)
 echo "Running xtb4stda on [[XYZ_BASENAME]] with -gbsa [[GBSA_SOLVENT]]"
-xtb4stda "[[XYZ_BASENAME]]" --gfn2 -gbsa [[GBSA_SOLVENT]] > xtb4stda.out
+TXTB0=$(date +%s)
+xtb4stda "[[XYZ_BASENAME]]" --gfn2 -gbsa [[GBSA_SOLVENT]] > xtb4stda.out 2>&1
+TXTB1=$(date +%s)
 
-# Run std2 up to [[EMAX_EV]] eV (line-buffered)
-echo "Running std2 (-xtb) up to [[EMAX_EV]] eV"
-std2 -xtb -e [[EMAX_EV]] > std2.out 
+# 2) std2 singlets
+echo "Running std2 (singlets) up to [[EMAX_EV]] eV"
+TSING0=$(date +%s)
+std2 -xtb -e [[EMAX_EV]] > std2_singlets.out 2>&1 || true
+# Move tda.dat if created
+if [ -s "tda.dat" ]; then mv -f tda.dat tda_singlets.dat; fi
+TSING1=$(date +%s)
 
-END_EPOCH=$(date +%s)
-RUNTIME=$((END_EPOCH - START_EPOCH))
-export RUNTIME 
+# 3) std2 triplets (-t)
+echo "Running std2 (triplets) up to [[EMAX_EV]] eV"
+TTRIP0=$(date +%s)
+std2 -xtb -t -e [[EMAX_EV]] > std2_triplets.out 2>&1 || true
+# Move tda.dat if created
+if [ -s "tda.dat" ]; then mv -f tda.dat tda_triplets.dat; fi
+TTRIP1=$(date +%s)
+
+T1=$(date +%s)
 
 # --- Parse outputs and write metadata.json ---
 python3 - <<'PY'
-import re, json, os
+import json, os
 from pathlib import Path
 
-def tail_err(txt, maxlen=800):
-    if not txt: return ""
-    lines = txt.splitlines()
-    tail = "\n".join(lines[-80:]).strip()
-    if len(tail) > maxlen: tail = tail[:maxlen] + "\n...[truncated]..."
-    return tail
+def ok_contains(path: str, needle: str) -> bool:
+    p = Path(path)
+    if not p.is_file(): return False
+    try:
+        return (needle in p.read_text(errors="ignore"))
+    except Exception:
+        return False
 
-xtb_txt = Path("xtb4stda.out").read_text(errors="ignore") if Path("xtb4stda.out").exists() else ""
-std2_txt = Path("std2.out").read_text(errors="ignore") if Path("std2.out").exists() else ""
+xtb_ok    = ok_contains("xtb4stda.out",       " 1  SCC done.")
+sing_ok   = ok_contains("std2_singlets.out",  "sTDA done.")
+trip_ok   = ok_contains("std2_triplets.out",  "sTDA done.")
 
-# xtb4stda success = contains "1  SCC done."
-xtb_ok = (" 1  SCC done." in xtb_txt)
-
-# std2 success = contains "sTDA done."
-std2_ok = ("sTDA done." in std2_txt)
+# time accounting
+to_i = lambda name: int(os.environ.get(name,"0") or "0")
+t_total = to_i("T1") - to_i("T0")
+t_xtb   = to_i("TXTB1") - to_i("TXTB0")
+t_sing  = to_i("TSING1") - to_i("TSING0")
+t_trip  = to_i("TTRIP1") - to_i("TTRIP0")
 
 meta = {
   "xtb4stda_error": (not xtb_ok),
-  "std2_error": (not std2_ok),
-  "runtime_seconds": int(os.environ.get("RUNTIME","0")),
+  "std2_singlets_error": (not sing_ok),
+  "std2_triplets_error": (not trip_ok),
+  "runtime_seconds_total": max(0, t_total),
+  "runtime_seconds_xtb4stda": max(0, t_xtb),
+  "runtime_seconds_singlets": max(0, t_sing),
+  "runtime_seconds_triplets": max(0, t_trip),
   "gbsa": "[[GBSA_SOLVENT]]",
   "emax_ev": float("[[EMAX_EV]]"),
   "threads": int(os.environ.get("OMP_NUM_THREADS","0") or "0"),
   "xyz_input": "[[XYZ_BASENAME]]",
+  "outputs": {
+    "xtb4stda_out": "xtb4stda.out",
+    "std2_singlets_out": "std2_singlets.out",
+    "std2_triplets_out": "std2_triplets.out",
+    "tda_singlets": "tda_singlets.dat" if Path("tda_singlets.dat").is_file() else "",
+    "tda_triplets": "tda_triplets.dat" if Path("tda_triplets.dat").is_file() else ""
+  }
 }
-
-if not xtb_ok:
-    meta["xtb4stda_error_excerpt"] = tail_err(xtb_txt)
-if not std2_ok:
-    meta["std2_error_excerpt"] = tail_err(std2_txt)
 
 Path("metadata.json").write_text(json.dumps(meta, indent=2))
 PY
 
-echo "std2 finished. Runtime ${RUNTIME}s"
+echo "std2 singlets+triplets finished. Total runtime $((T1-T0)) s"
 
