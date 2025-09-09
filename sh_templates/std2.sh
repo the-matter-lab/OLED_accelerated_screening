@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=[[CPUS_PER_TASK]]
 [[WALLTIME_LINE]]
 #SBATCH --job-name=[[JOB_NAME]]
-#SBATCH --array=0-0
+#SBATCH --array=0-0  ## Dummy entry. Gets rewritten at submission time.
 
 set -euo pipefail
 
