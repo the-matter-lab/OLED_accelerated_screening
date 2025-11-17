@@ -48,5 +48,7 @@ def main():
     print("Done.")
 
 if __name__ == "__main__":
+    """Usage example:
+    python src/run/partition_compounds.py --root compounds --partition_size 1000 """
     main()
 

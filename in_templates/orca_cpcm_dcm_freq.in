@@ -1,0 +1,18 @@
+! b97-3c RIJCOSX def2-mTZVP def2/J Freq CPCM(dcm) TightSCF
+
+%scf
+  MaxIter 500
+end
+
+%geom
+  MaxIter 999
+end
+
+%pal
+  nprocs [[NPROCS]]
+end
+
+%maxcore [[MAXCORE]]
+
+* xyz [[CHARGE]] [[MULT]]
+[[XYZ_BLOCK]]*

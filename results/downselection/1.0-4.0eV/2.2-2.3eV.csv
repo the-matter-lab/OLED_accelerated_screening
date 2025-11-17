@@ -1,0 +1,6 @@
+partition,mol,smiles,strength,absorption,E_S1_eV,E_T1_eV,E_ST_eV,f_osc_S1
+partition_1,mol1402,CCCCC(CC)CN1C(=O)C(C#N)=C(c2sc(-c3ccc4c(c3)Sc3cc(C=C(C#N)C(=O)O)ccc3N4C)cc2C)C1=O,4,0,2.2409,1.4169,0.824,1.617581
+partition_1,mol1420,CC1=[N+]2C(=Nc3c(-c4ccccc4)cc(-c4cccs4)n3[B-]2(F)F)C=C1c1cccs1,4,0,2.2295,1.0586,1.1709,0.745396
+partition_0,mol0557,CCCCCCCCCCCCCCCOc1ccccc1N1c2ccccc2Sc2cc(/C=C(\C#N)C(=O)O)ccc21,1,2,2.2932,1.5234,0.7698,0.687036
+partition_1,mol1010,CCc1c2cc3ccccc3cc2c(C#Cc2ccccc2)c2cc3ccccc3cc12,3,0,2.227,1.1301,1.0969,0.523707
+partition_1,mol1022,Cc1c2cc3ccccc3cc2c(C#C[Si](C(C)C)(C(C)C)C(C)C)c2cc3ccccc3cc12,3,0,2.2059,1.1139,1.092,0.352667

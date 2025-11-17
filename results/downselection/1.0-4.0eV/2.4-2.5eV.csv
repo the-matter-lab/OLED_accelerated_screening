@@ -1,0 +1,6 @@
+partition,mol,smiles,strength,absorption,E_S1_eV,E_T1_eV,E_ST_eV,f_osc_S1
+partition_1,mol1516,F[B-]1(F)n2c(c3ccccc3c2-c2ccccc2)C(c2ccccc2)=C2c3ccccc3C(c3ccccc3)=[N+]21,4,1,2.4038,1.086,1.3178,1.677379
+partition_1,mol1040,F[B-]1(F)n2c(-c3ccccc3)cc(-c3ccccc3)c2N=C2C(c3ccccc3)=CC(c3ccccc3)=[N+]21,3,0,2.4337,1.148,1.2857,1.24098
+partition_1,mol1392,F[B-]1(F)n2c(c(-c3ccccc3)c(-c3ccccc3)c2-c2ccccc2)N=C2C=C(c3ccccc3)C(c3ccccc3)=[N+]21,4,0,2.4265,1.1328,1.2937,1.166781
+partition_1,mol1397,CCN1/C(=C\C2=C([O-])C(C)/C2=C/C2=[N+](CC)c3ccccc3C2(C)C)C(C)(C)c2ccccc21,4,0,2.4366,1.5665,0.8701,0.806418
+partition_1,mol1596,CN(C)c1ccc(/C=C/c2nc(N)c3c([n+]2[O-])CCCC3)cc1,4,2,2.4532,1.5535,0.8997,0.641124

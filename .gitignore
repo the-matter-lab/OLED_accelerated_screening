@@ -1,4 +1,6 @@
 compounds/*
+downselected/*
 logs/*
 test/*
+test_downselected/*
 test_logs/*

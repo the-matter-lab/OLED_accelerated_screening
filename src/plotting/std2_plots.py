@@ -406,5 +406,9 @@ def main():
         f.write(f"Permutation tests used n={args.n_permutations} shuffles\n")
 
 if __name__ == "__main__":
+    """Usage example:
+    python src/plotting/std2_plots.py --csv results/std2/std2.csv \
+    --output_dir results/std2/plots --n_permutations 5000
+    """
     main()
 
