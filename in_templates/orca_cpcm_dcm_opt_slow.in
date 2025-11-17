@@ -1,0 +1,18 @@
+! b97-3c RIJCOSX def2-mTZVP def2/J Opt CPCM(dcm) SlowConv TightSCF
+
+%scf
+  MaxIter 800
+end
+
+%geom
+  MaxIter 999
+end
+
+%pal
+  nprocs [[NPROCS]]
+end
+
+%maxcore [[MAXCORE]]
+
+* xyz [[CHARGE]] [[MULT]]
+[[XYZ_BLOCK]]*

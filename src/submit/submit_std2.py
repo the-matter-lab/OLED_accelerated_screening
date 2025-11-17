@@ -179,7 +179,7 @@ def main():
     (part_dir / "std2_array_submit.json").write_text(json.dumps(manifest, indent=2))
 
 if __name__ == "__main__":
-    """python submit_std2.py --partition_dir compounds/partition_0 \
+    """python src/submit/submit_std2.py --partition_dir compounds/partition_0 \
         --gbsa ch2cl2 --emax 20.0 --chunk-size 50 \
             --cpus-per-task 40 --time 02:00:00"""
 
