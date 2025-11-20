@@ -349,13 +349,13 @@ if __name__ == "__main__":
     Example usage:
 
     # Dry run: see which molecules would be prepared for reoptimization
-    python src/submit/set_reopt_imag_freq.py --root downselected --dry-run
+    python src/run/set_reopt_imag_freq.py --root downselected --dry-run
 
     # Actually create reopt_b97_3c geometries for |imag| > 20 cm^-1
-    python src/submit/set_reopt_imag_freq.py --root downselected
+    python src/run/set_reopt_imag_freq.py --root downselected
 
     # More conservative threshold (e.g. > 30 cm^-1) and different frame
-    python src/submit/set_reopt_imag_freq.py --root downselected \
+    python src/run/set_reopt_imag_freq.py --root downselected \
         --imag-threshold 30.0 \
         --frame-index 6
     """
