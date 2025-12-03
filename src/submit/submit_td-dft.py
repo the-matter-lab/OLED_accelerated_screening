@@ -388,6 +388,7 @@ if __name__ == "__main__":
 
     python src/submit/submit_td-dft.py --downselection-path downselected \
         --threads-per-job 32 \
+        --sh-template sh_templates/orca_cpcm_dcm_td-dft_safe.sh \
         --jobs-per-node 6 \
         --time 08:00:00 \
         --charge 0 --mult 1

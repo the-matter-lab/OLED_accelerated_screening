@@ -1,5 +1,6 @@
 compounds/*
 downselected/*
+validation/*
 logs/*
 test/*
 test_downselected/*
