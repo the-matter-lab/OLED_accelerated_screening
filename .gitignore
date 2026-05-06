@@ -5,3 +5,6 @@ logs/*
 test/*
 test_downselected/*
 test_logs/*
+training_dataset/*
+*.svg
+plots_for_manuscript/training_and_generated/combined_training_data.csv
